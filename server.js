@@ -1,4 +1,4 @@
-// Exverminate relay â€” room-code matchmaking + PUBLIC room list, over WebSocket.
+// Exverminate relay — room-code matchmaking + PUBLIC room list, over WebSocket.
 // Players create or join a room by 5-letter code; every game message is relayed to the
 // others in the same room. Public rooms also show up in the in-game browser.
 // All game logic lives in the Godot client.
@@ -52,7 +52,7 @@ wss.on('connection', (ws) => {
   ws.id = nextId++;
   ws.code = null;
   ws.isAlive = true;
-  ws.on('pong', () => { ws.isAlive = true; });   // client answered our heartbeat â†’ still connected
+  ws.on('pong', () => { ws.isAlive = true; });   // client answered our heartbeat → still connected
   send(ws, { t: 'welcome', id: ws.id });
 
   ws.on('message', (data) => {
@@ -106,7 +106,7 @@ wss.on('connection', (ws) => {
       }
 
     } else if (msg.t === 'announce') {
-      // DEV BROADCAST: only with the secret key â€” push a banner to EVERY connected player
+      // DEV BROADCAST: only with the secret key — push a banner to EVERY connected player
       if (msg.key === ADMIN_KEY) {
         const payload = {
           t: 'announce',

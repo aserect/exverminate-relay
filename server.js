@@ -6,6 +6,7 @@
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 8080;
+const ADMIN_KEY = process.env.ADMIN_KEY || 'pudlo2024';   // secret for dev broadcasts (change it / set in Render env)
 
 const rooms = new Map();          // code -> Map(clientId -> ws)
 const meta  = new Map();          // code -> { public: bool, name: string }   (room info for the list)
@@ -50,6 +51,8 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', (ws) => {
   ws.id = nextId++;
   ws.code = null;
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });   // client answered our heartbeat â†’ still connected
   send(ws, { t: 'welcome', id: ws.id });
 
   ws.on('message', (data) => {
@@ -102,6 +105,17 @@ wss.on('connection', (ws) => {
         if (typeof msg.name === 'string') m.name = msg.name.slice(0, 32);
       }
 
+    } else if (msg.t === 'announce') {
+      // DEV BROADCAST: only with the secret key â€” push a banner to EVERY connected player
+      if (msg.key === ADMIN_KEY) {
+        const payload = {
+          t: 'announce',
+          name: (msg.name || 'pudlo').toString().slice(0, 24),
+          text: (msg.text || '').toString().slice(0, 200),
+        };
+        for (const c of wss.clients) send(c, payload);
+      }
+
     } else if (ws.code) {
       msg.from = ws.id;               // game data: stamp sender, relay to the room
       relay(ws.code, ws.id, msg);
@@ -117,5 +131,17 @@ wss.on('connection', (ws) => {
     }
   });
 });
+
+// keep-alive heartbeat: ping every 30s and drop only the connections that stop answering.
+// This stops idle WebSocket connections from being silently cut (a cause of random
+// "disconnected from your room"). Godot clients auto-reply to pings, so they stay alive.
+const heartbeat = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch (e) {}
+  }
+}, 30000);
+wss.on('close', () => clearInterval(heartbeat));
 
 server.listen(PORT, () => console.log('Relay listening on ' + PORT));

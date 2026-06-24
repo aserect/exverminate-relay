@@ -63,7 +63,7 @@ wss.on('connection', (ws) => {
       const code = makeCode();
       ws.code = code;
       rooms.set(code, new Map([[ws.id, ws]]));
-      meta.set(code, { public: !!msg.public, name: (msg.name || '').toString().slice(0, 32) });
+      meta.set(code, { public: !!msg.public, name: (msg.name || '').toString().slice(0, 32), host: ws.id });
       send(ws, { t: 'created', code, id: ws.id, host: true });
 
     } else if (msg.t === 'join') {
@@ -93,7 +93,7 @@ wss.on('connection', (ws) => {
         const code = makeCode();
         ws.code = code;
         rooms.set(code, new Map([[ws.id, ws]]));
-        meta.set(code, { public: true, name: 'Quick Game' });
+        meta.set(code, { public: true, name: 'Quick Game', host: ws.id });
         send(ws, { t: 'created', code, id: ws.id, host: true });
       }
 
@@ -125,9 +125,18 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     if (ws.code && rooms.has(ws.code)) {
       const room = rooms.get(ws.code);
+      const m = meta.get(ws.code);
       room.delete(ws.id);
-      relay(ws.code, ws.id, { t: 'peer_left', id: ws.id });
-      if (room.size === 0) { rooms.delete(ws.code); meta.delete(ws.code); }   // also forget its public listing
+      if (m && m.host === ws.id) {
+        // the HOST left → kick everyone else and close the room
+        for (const [, c] of room) send(c, { t: 'host_left' });
+        room.clear();
+        rooms.delete(ws.code);
+        meta.delete(ws.code);
+      } else {
+        relay(ws.code, ws.id, { t: 'peer_left', id: ws.id });
+        if (room.size === 0) { rooms.delete(ws.code); meta.delete(ws.code); }   // also forget its public listing
+      }
     }
   });
 });
